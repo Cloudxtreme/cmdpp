@@ -35,12 +35,12 @@ sub parse($@) {
 	return \%out;
 }
 
-@ARGV or die "Usage: cmdpp [-n] <command> <args>...\n";
 my $dry_run;
 if( @ARGV and "-n" eq $ARGV[0] ) {
 	shift @ARGV;
 	$dry_run = 1;
 }
+@ARGV or die "Usage: cmdpp [-n] <command> <args>...\n";
 my $name = shift @ARGV;
 my $macros = parse $name, "/etc/cmdpp.conf", "$ENV{HOME}/.cmdpp";
 die "cmdpp: no macros found for $name\n" unless keys %$macros;
