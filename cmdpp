@@ -1,0 +1,62 @@
+#!/usr/bin/perl -w
+use strict;
+
+sub parse($@) {
+	my ($name, @paths) = @_;
+	my $ok;
+	my %out = ();
+	foreach my $path ( @paths ) {
+		next unless -f $path;
+		my $section;
+		open CONF, "<", $path or die $!;
+		while(<CONF>) {
+			if( /^\s*(#.*)?$/ ) {
+				# skip
+			} elsif( /^\s*\[\s*(\w+)\s*\]\s*$/ ) {
+				$section = $1;
+			} elsif( defined($section) and $name eq $section ) {
+				s/^\s*([\w\-]+)\s+=>\s+(.*)$/$2/
+					or die "bad line: $_\n";
+				my $arg = $1;
+				my @def = ();
+				while( length ) {
+					s/^(([\w\-]+)|('([^'\\]*)'))(\s+(.*))$/$6/
+						or die "cmdpp: unexpected: $_\n";
+					push @def, ( $2 || $4 );
+				}
+				@def or die "cmdpp: empty definition for $arg\n";
+				$out{$arg} = [@def];
+			}
+		}
+		close CONF or die $!;
+		$ok = 1;
+	}
+	$ok or die "cmdpp: no config file found\n";
+	return \%out;
+}
+
+@ARGV or die "Usage: cmdpp [-n] <command> <args>...\n";
+my $dry_run;
+if( @ARGV and "-n" eq $ARGV[0] ) {
+	shift @ARGV;
+	$dry_run = 1;
+}
+my $name = shift @ARGV;
+my $macros = parse $name, "/etc/cmdpp.conf", "$ENV{HOME}/.cmdpp";
+die "cmdpp: no macros found for $name\n" unless keys %$macros;
+my @args = ();
+while( @ARGV ) {
+	my $cur = shift @ARGV;
+	if( my $out = $macros->{$cur} ) {
+		unshift @ARGV, @$out;
+	} else {
+		push @args, $cur;
+	}
+}
+if( $dry_run ) {
+	printf "%s %s\n", $name, join " ", map {
+		/^[\w\-]+$/ ? $_ : /^[^'\\]*$/ ? "'$_'" : die $_
+	} @args;
+} else {
+	exec { $name } $name, @args;
+}
